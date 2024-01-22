@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    #gameContainer {
+      position: relative;
+      background: #0a0a0a; /* Cambiar el color del fondo según tu preferencia */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    canvas {
+      display: block;
+      border: 1px solid #000;
+      touch-action: none; /* Evita el comportamiento táctil predeterminado */
+      margin-bottom: 10px;
+    }
+
+    .buttonContainer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .controlButton {
+      font-size: 18px;
+      padding: 10px;
+      cursor: pointer;
+    }
+
+    #scoreModal {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgb(253, 253, 253);
+      padding: 20px;
+      display: none;
+      border: 1px solid #ccc;
+    }
+  </style>
+  <title>Fruit Ninja Arcade</title>
+</head>
+<body>
+
+<div id="gameContainer">
+  <audio id="backgroundSound" src="sonidos/panic-182769.mp3" loop></audio>
+  <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+  <audio id="sliceSound" src="sonidos/corte al aire.mp3"></audio>
+  <audio id="fruitCutSound" src="sonidos/corte fruta.mp3"></audio>
+
+  <div class="buttonContainer">
+    <button id="playButton" class="controlButton">Play</button>
+    <button id="pauseButton" class="controlButton" disabled>Pause</button>
+    <button id="resumeButton" class="controlButton" disabled>Resume</button>
+    <button id="stopButton" class="controlButton" disabled>Stop</button>
+    <button id="muteButton" class="controlButton">Mute</button>
+    <button id="scoreButton" class="controlButton">View Scores</button>
+  </div>
+
+  <div id="scoreModal">
+    <label for="playerName">Enter your name:</label>
+    <input type="text" id="playerName" />
+    <button onclick="saveScore()">Save Score</button>
+  </div>
+</div>
+
+<script>
+  var container = document.getElementById("gameContainer");
+  var canvas = document.getElementById("gameCanvas");
+  var ctx = canvas.getContext("2d");
+  var fruits = [];
+  var score = 0;
+  var isPaused = false;
+  var isSlicing = false;
+  var sliceStartPosition = { x: 0, y: 0 };
+  var backgroundSound = document.getElementById("backgroundSound");
+
+  var playButton = document.getElementById("playButton");
+  var pauseButton = document.getElementById("pauseButton");
+  var resumeButton = document.getElementById("resumeButton");
+  var stopButton = document.getElementById("stopButton");
+  var muteButton = document.getElementById("muteButton");
+  var scoreButton = document.getElementById("scoreButton");
+
+  playButton.addEventListener("click", startGame);
+  pauseButton.addEventListener("click", pauseGame);
+  resumeButton.addEventListener("click", resumeGame);
+  stopButton.addEventListener("click", stopGame);
+  muteButton.addEventListener("click", toggleMute);
+  scoreButton.addEventListener("click", showScores);
+
+  var playerNameInput = document.getElementById("playerName");
+  var scoreModal = document.getElementById("scoreModal");
+
+  function startGame() {
+    score = 0;
+    fruits = [];
+    isPaused = false;
+    isSlicing = false;
+    playButton.disabled = true;
+    pauseButton.disabled = false;
+    resumeButton.disabled = true;
+    stopButton.disabled = false;
+    muteButton.disabled = false;
+    scoreButton.disabled = true;
+    backgroundSound.play();
+    gameLoop();
+  }
+
+  function pauseGame() {
+    isPaused = true;
+    playButton.disabled = true;
+    pauseButton.disabled = true;
+    resumeButton.disabled = false;
+    stopButton.disabled = false;
+    muteButton.disabled = false;
+    scoreButton.disabled = false;
+    backgroundSound.pause();
+  }
+
+  function resumeGame() {
+    isPaused = false;
+    playButton.disabled = true;
+    pauseButton.disabled = false;
+    resumeButton.disabled = true;
+    stopButton.disabled = false;
+    muteButton.disabled = false;
+    scoreButton.disabled = true;
+    backgroundSound.play();
+    gameLoop();
+  }
+
+  function stopGame() {
+    isPaused = true;
+    playButton.disabled = false;
+    pauseButton.disabled = true;
+    resumeButton.disabled = true;
+    stopButton.disabled = true;
+    muteButton.disabled = false;
+    scoreButton.disabled = false;
+    backgroundSound.pause();
+  }
+
+  function toggleMute() {
+    if (backgroundSound.muted) {
+      backgroundSound.muted = false;
+      muteButton.textContent = "Mute";
+    } else {
+      backgroundSound.muted = true;
+      muteButton.textContent = "Unmute";
+    }
+  }
+
+  function showScores() {
+    scoreModal.style.display = "block";
+    playerNameInput.value = "";
+  }
+
+  function saveScore() {
+    var playerName = playerNameInput.value.trim();
+    if (playerName !== "") {
+      alert(playerName + "'s score: " + score);
+      scoreModal.style.display = "none";
+    } else {
+      alert("Please enter your name.");
+    }
+  }
+
+  function spawnFruit() {
+    var fruitTypes = ["apple", "orange", "watermelon"];
+    var randomType = fruitTypes[Math.floor(Math.random() * fruitTypes.length)];
+    var fruit = {
+      type: randomType,
+      x: Math.random() * (canvas.width - 50),
+      y: canvas.height,
+      radius: 20,
+      speedY: Math.random() * 2 + 2,
+      speedX: (Math.random() - 0.5) * 4,
+      isSliced: false,
+      delta: 0,
+      image: new Image()
+    };
+    fruit.image.src = `Fotos/冷や汗-ガクブル.gif`;
+    fruits.push(fruit);
+  }
+
+  function drawFruits() {
+    for (var i = 0; i < fruits.length; i++) {
+      var fruit = fruits[i];
+
+      if (!fruit.isSliced) {
+        ctx.drawImage(fruit.image, fruit.x - fruit.radius, fruit.y - fruit.radius, fruit.radius * 2, fruit.radius * 2);
+      }
+
+      if (!isPaused) {
+        fruit.y -= fruit.speedY;
+        fruit.x += fruit.speedX;
+
+        if (fruit.y > canvas.height - fruit.radius) {
+          fruit.speedY *= -0.8;
+          fruit.y = canvas.height - fruit.radius;
+        }
+
+        fruit.speedX *= 0.98;
+      }
+
+      if (fruit.y > canvas.height + fruit.radius) {
+        fruits.splice(i, 1);
+        i--;
+      }
+    }
+  }
+
+  function playSound(sound) {
+    sound.currentTime = 0;
+    sound.play();
+  }
+
+  function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    var background = new Image();
+    background.src = "Fotos/Bambu fondo.jpg";
+    ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+
+    spawnFruit();
+    drawFruits();
+
+    ctx.font = "30px Arial";
+    ctx.fillStyle = "black";
+    ctx.fillText("Score: " + score, 20, 50);
+
+    if (!isPaused) {
+      requestAnimationFrame(gameLoop);
+    }
+  }
+
+  canvas.addEventListener("mousedown", function (event) {
+    if (event.button === 0) {  // Clic izquierdo
+      isSlicing = true;
+      sliceStartPosition = {
+        x: event.clientX - canvas.getBoundingClientRect().left,
+        y: event.clientY - canvas.getBoundingClientRect().top
+      };
+    }
+  });
+
+  canvas.addEventListener("touchstart", function (event) {
+    isSlicing = true;
+    sliceStartPosition = {
+      x: event.touches[0].clientX - canvas.getBoundingClientRect().left,
+      y: event.touches[0].clientY - canvas.getBoundingClientRect().top
+    };
+  });
+
+  canvas.addEventListener("mousemove", function (event) {
+    if (isSlicing) {
+      var mouseX = event.clientX - canvas.getBoundingClientRect().left;
+      var mouseY = event.clientY - canvas.getBoundingClientRect().top;
+
+      for (var i = 0; i < fruits.length; i++) {
+        var fruit = fruits[i];
+        var distance = Math.sqrt((mouseX - fruit.x) ** 2 + (mouseY - fruit.y) ** 2);
+
+        if (distance < fruit.radius && !fruit.isSliced) {
+          fruit.isSliced = true;
+          score += (fruit.type !== "watermelon") ? 1 : 20;
+          playSound(fruitCutSound);
+        }
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(sliceStartPosition.x, sliceStartPosition.y);
+      ctx.lineTo(mouseX, mouseY);
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 5;
+      ctx.stroke();
+      sliceStartPosition = { x: mouseX, y: mouseY };
+    }
+  });
+
+  canvas.addEventListener("touchmove", function (event) {
+    if (isSlicing) {
+      var mouseX = event.touches[0].clientX - canvas.getBoundingClientRect().left;
+      var mouseY = event.touches[0].clientY - canvas.getBoundingClientRect().top;
+
+      for (var i = 0; i < fruits.length; i++) {
+        var fruit = fruits[i];
+        var distance = Math.sqrt((mouseX - fruit.x) ** 2 + (mouseY - fruit.y) ** 2);
+
+        if (distance < fruit.radius && !fruit.isSliced) {
+          fruit.isSliced = true;
+          score += (fruit.type !== "watermelon") ? 1 : 20;
+          playSound(fruitCutSound);
+        }
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(sliceStartPosition.x, sliceStartPosition.y);
+      ctx.lineTo(mouseX, mouseY);
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 5;
+      ctx.stroke();
+      sliceStartPosition = { x: mouseX, y: mouseY };
+    }
+  });
+
+  canvas.addEventListener("mouseup", function (event) {
+    if (event.button === 0) {  // Clic izquierdo
+      isSlicing = false;
+    }
+  });
+
+  canvas.addEventListener("touchend", function () {
+    isSlicing = false;
+  });
+
+  // Prevenir menú contextual al hacer clic derecho
+  canvas.addEventListener("contextmenu", function (event) {
+    event.preventDefault();
+  });
+
+</script>
+
+</body>
+</html>
